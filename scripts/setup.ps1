@@ -14,9 +14,9 @@
       - PYTHONPATH is pointed at the shared packages so the interpreter picks
         up yt-dlp / faster-whisper / ctranslate2 without a pip install.
 .EXAMPLE
-    . .\skills\bilibili-render-md\scripts\setup.ps1
+    . \.opencode\skills\bilibili-render-md\scripts\setup.ps1
     New-BilinoteTranscriptEnv -Workspace (Get-Location)
-    & "C:\Python313\python.exe" ".\.opencode\skills\bilibili-render-md\scripts\transcribe_faster.py" `
+    & "C:\Python313\python.exe" ".\.opencode\skills\bilibili-render-md\scripts\transcribe_faster.py" \`
         "...source\media\clip.mp4" --workspace "." --output-dir "...work\transcript" `
         --model small.en --model-path "...output\_models\faster-whisper-small.en" `
         --device cuda --compute-type float16 --language en --force
