@@ -1,0 +1,73 @@
+#!/usr/bin/env python3
+"""Create the portable output layout for one Bilibili-to-Markdown job."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import re
+from pathlib import Path
+
+
+SAFE = re.compile(r"[^A-Za-z0-9._-]+")
+
+
+def safe_component(value: str) -> str:
+    value = SAFE.sub("-", value.strip()).strip("-.")
+    if not value:
+        raise ValueError("job component is empty after sanitization")
+    return value
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--workspace", type=Path, default=Path.cwd())
+    parser.add_argument("--bvid", required=True)
+    parser.add_argument("--part", help="Part number, for example 5")
+    args = parser.parse_args()
+
+    workspace = args.workspace.expanduser().resolve()
+    bvid = safe_component(args.bvid)
+    suffix = f"P{safe_component(args.part)}" if args.part else "FULL"
+    job_root = (workspace / "output" / f"{bvid}_{suffix}").resolve()
+
+    expected_parent = (workspace / "output").resolve()
+    if expected_parent != job_root.parent:
+        raise ValueError("resolved job path escaped the workspace output directory")
+
+    relative_dirs = [
+        "source/metadata",
+        "source/media",
+        "work/transcript/chunks",
+        "work/frames/coarse",
+        "work/frames/targeted",
+        "work/contact-sheets",
+        "work/logs",
+        "work/temp",
+        "deliverables/docs",
+        "deliverables/assets/cover",
+        "deliverables/assets/figures",
+        "deliverables/attachments",
+    ]
+    for relative in relative_dirs:
+        (job_root / relative).mkdir(parents=True, exist_ok=True)
+
+    manifest = {
+        "workspace": str(workspace),
+        "job_root": str(job_root),
+        "job_id": job_root.name,
+        "bvid": bvid,
+        "part": args.part,
+        "directories": {name: str(job_root / name) for name in relative_dirs},
+    }
+    manifest_path = job_root / "work" / "job-layout.json"
+    manifest_path.write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    print(json.dumps(manifest, ensure_ascii=False, indent=2))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

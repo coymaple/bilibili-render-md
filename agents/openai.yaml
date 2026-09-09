@@ -1,0 +1,4 @@
+interface:
+  display_name: "Bilibili Markdown 讲义"
+  short_description: "将 Bilibili 视频整理为中文图文 Markdown 讲义"
+  default_prompt: "Use $bilibili-render-md to turn this Bilibili video into structured Chinese Markdown notes."
