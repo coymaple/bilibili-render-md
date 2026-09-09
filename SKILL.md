@@ -185,6 +185,8 @@ When the lecturer modifies a file that was already shown earlier in the video, d
 
 Do not invent changes beyond what the lecturer actually did; if only one line changes, show that single change with context and state that the rest was untouched.
 
+Every code block that imports a package or uses a library must be accompanied by the installation command nearby (e.g. `pip install faster-whisper`, `npm install express`). The document must be self-contained: a reader should be able to follow every step without watching the video.
+
 The document should normally include:
 
 - title, source URL, exact part scope, duration, and transcription provenance;
@@ -266,9 +268,9 @@ The final Markdown file name must follow one fixed pattern and match the job's v
 
 ### 8. Validate before delivery
 
-Run `scripts/validate_delivery.py --job-root <job-root> --markdown <final-md>`.
+Run `scripts/validate_delivery.py --job-root <job-root> --markdown <final-md> --strict`.
 
-Confirm that:
+Confirm that structural checks pass:
 
 - every local Markdown link resolves;
 - every relative local link stays inside `deliverables/`;
@@ -277,6 +279,25 @@ Confirm that:
 - no secrets, tokens, cookie values, email addresses, private endpoints, or personal identifiers appear;
 - the notes do not exceed the user-approved part range;
 - original and intermediate files remain outside `deliverables/`.
+
+Confirm that quality checks pass (the `--strict` flag enables these):
+
+- every fenced code block has a file path comment as its first line (`// <path>` or `# <path>`);
+- code blocks containing imports have a nearby dependency installation command (`pip install` / `npm install`);
+- the document contains no references to the video (e.g. "as shown in the video", "如视频所示") — it must be self-contained;
+- all required sections are present (`#`, `## 这一讲完成什么`, `## 学习路线`, `## 一、…`);
+- every figure reference has a matching caption with the `图 N：…，画面时间 …` pattern.
+
+#### Re-generation on quality failure
+
+If any quality check fails (warnings or errors), do not deliver. Instead:
+
+1. Read the failed categories from the validation output.
+2. Read the corresponding transcript chunks via `scripts/slice_transcript.py`.
+3. Re-read [references/whisper.md](references/whisper.md) for model and transcription guidance.
+4. Re-write the affected sections, ensuring every code block has its path comment and dependency commands.
+5. Re-run validation with `--strict` before delivering again.
+6. If re-generation is needed more than once, update `work/logs/handoff.md` with the specific failure categories so a later context can resume without re-examining the video.
 
 Deliver the final Markdown link first, followed by optional attachment and job-directory links. Do not generate PDF or LaTeX unless the user changes the requested deliverable and invokes an appropriate workflow.
 
@@ -291,6 +312,14 @@ Deliver the final Markdown link first, followed by optional attachment and job-d
 - 读取更多转录块
 - 检查是否覆盖了所有主要教学点
 - 验证代码示例是否完整
+- 检查 `scripts/validate_delivery.py --strict` 的 quality warnings
+
+### 质量检查失败（依赖命令缺失、引用视频、代码块无路径注释）
+- 根据 `validate_delivery.py --strict` 的输出定位失败类别
+- 重新读取对应转录块和 [references/whisper.md](references/whisper.md)
+- 重写受影响章节：确保每个代码块有路径注释、依赖安装命令完整、文档自包含
+- 更新 `work/logs/handoff.md` 记录失败类别
+- 重新运行 `--strict` 验证通过后交付
 
 ### 链接验证失败
 - 检查文件路径是否正确
