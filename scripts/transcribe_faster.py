@@ -10,6 +10,22 @@ import sys
 from pathlib import Path
 
 
+def ensure_cuda_path(workspace: Path) -> None:
+    if os.name != "nt":
+        return
+    try:
+        import torch
+    except ImportError:
+        return
+    torch_lib = Path(torch.__file__).parent / "lib"
+    if not torch_lib.is_dir():
+        return
+    torch_path = str(torch_lib)
+    current_path = os.environ.get("PATH", "")
+    if torch_path not in current_path.split(os.pathsep):
+        os.environ["PATH"] = torch_path + os.pathsep + current_path
+
+
 def timestamp(seconds: float) -> str:
     milliseconds = round(seconds * 1000)
     hours, milliseconds = divmod(milliseconds, 3_600_000)
@@ -67,6 +83,8 @@ def main() -> int:
         if package_root.is_dir():
             sys.path.insert(0, str(package_root))
 
+    ensure_cuda_path(workspace)
+
     try:
         from faster_whisper import WhisperModel
     except ImportError as error:
@@ -109,6 +127,7 @@ def main() -> int:
         raise FileExistsError("output exists; pass --force to replace it")
 
     cache_root = workspace / "output" / "_models" / "_cache"
+    ensure_cuda_path(workspace)
     model = WhisperModel(
         str(model_source),
         device=args.device,

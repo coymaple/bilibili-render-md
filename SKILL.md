@@ -73,7 +73,7 @@ Use this order:
 2. Local Whisper transcription.
 3. Visual-only analysis when audio is unusable.
 
-If Whisper is needed, read [references/whisper.md](references/whisper.md) before installing, downloading, or transcribing. Check local packages and local model paths before any network action. Stop repeated model-download attempts after one official endpoint and at most one user-approved fallback; use an already available model when possible. On this workspace, load `scripts/setup.ps1` to prepare the Python 3.13 environment, the shared packages path, and the CUDA runtime DLL path before running a transcription.
+If Whisper is needed, read [references/whisper.md](references/whisper.md) before installing, downloading, or transcribing. Check local packages and local model paths before any network action. Stop repeated model-download attempts after one official endpoint and at most one user-approved fallback; use an already available model when possible. On this workspace, `scripts/transcribe_faster.py` automatically discovers shared packages and CUDA runtime DLLs. The optional `scripts/setup.ps1` script remains available for manual environment inspection.
 
 #### Check available models first
 

@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Prepare the local Whisper GPU transcription environment for this workspace.
+    Prepare the local Whisper GPU transcription environment for this workspace (optional; transcribe_faster.py auto-discovers CUDA DLLs).
     Load this file in  PowerShell 5.1 and call New-BilinoteTranscriptEnv,
     or run the individual steps below directly.
 
