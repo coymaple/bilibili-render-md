@@ -283,10 +283,22 @@ Confirm that structural checks pass:
 Confirm that quality checks pass (the `--strict` flag enables these):
 
 - every fenced code block has a file path comment as its first line (`// <path>` or `# <path>`);
-- code blocks containing imports have a nearby dependency installation command (`pip install` / `npm install`);
+- code blocks containing imports have a dependency installation command somewhere in the document (e.g. `pip install`, `npm install`, `bun add`, `cargo install`, `conda install`, etc.);
 - the document contains no references to the video (e.g. "as shown in the video", "如视频所示") — it must be self-contained;
 - all required sections are present (`#`, `## 这一讲完成什么`, `## 学习路线`, `## 一、…`);
 - every figure reference has a matching caption with the `图 N：…，画面时间 …` pattern.
+
+The dependency check is a coverage check — it verifies the document mentions an installation command at least once, not that each code block has one inline. This accommodates projects using multiple package managers or languages.
+
+#### Writing quality self-check (before validation)
+
+Before running `validate_delivery.py`, verify these properties in the draft:
+
+1. **Self-contained**: Can a reader follow every step without watching the video? Every command, every import, every configuration is stated explicitly.
+2. **Code completeness**: Does every code block represent a complete, runnable snippet? Truncated or partial code is a quality failure.
+3. **No video dependency**: No phrases like "as I showed" or "like the video" — everything is written as if the reader has never seen the video.
+4. **Multi-language support**: The document may use Python, TypeScript, shell, JSON, etc. — installation commands must match the language of the code block.
+5. **Path accuracy**: Every `// <path>` comment uses the exact path the lecturer showed, not an invented one.
 
 #### Re-generation on quality failure
 
@@ -295,7 +307,7 @@ If any quality check fails (warnings or errors), do not deliver. Instead:
 1. Read the failed categories from the validation output.
 2. Read the corresponding transcript chunks via `scripts/slice_transcript.py`.
 3. Re-read [references/whisper.md](references/whisper.md) for model and transcription guidance.
-4. Re-write the affected sections, ensuring every code block has its path comment and dependency commands.
+4. Re-write the affected sections, following the Writing quality self-check rules above.
 5. Re-run validation with `--strict` before delivering again.
 6. If re-generation is needed more than once, update `work/logs/handoff.md` with the specific failure categories so a later context can resume without re-examining the video.
 
@@ -312,7 +324,7 @@ Deliver the final Markdown link first, followed by optional attachment and job-d
 - 读取更多转录块
 - 检查是否覆盖了所有主要教学点
 - 验证代码示例是否完整
-- 检查 `scripts/validate_delivery.py --strict` 的 quality warnings
+- 执行 Writing quality self-check 中的 5 条自检规则
 
 ### 质量检查失败（依赖命令缺失、引用视频、代码块无路径注释）
 - 根据 `validate_delivery.py --strict` 的输出定位失败类别

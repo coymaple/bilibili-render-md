@@ -21,30 +21,36 @@ SENSITIVE = [
 ]
 
 CODE_BLOCK_RE = re.compile(r"```(\w+)?\n(.*?)```", re.DOTALL)
-IMPORT_RE = re.compile(r"^(?:import |from )\s+(\w+)", re.MULTILINE)
-PACKAGE_NAMES = re.compile(r"^(pip|npm|yarn|bun|pnpm|cnpm)\s+install|pip install|npm install", re.MULTILINE)
 BARE_IMPORT = re.compile(r"^(import |from )", re.MULTILINE)
-MISSING_CONTEXT = re.compile(r"(as shown in the video|see the video|like I showed|as demonstrated|视频中的|如视频所示|如我之前)", re.IGNORECASE)
-
-QUALITY_PATTERNS = {
-    "no_dependency_command": (
-        r"^(import |from )",
-        "Code block contains imports but no nearby pip/npm install command",
-    ),
-    "no_path_comment": (
-        r"```\w+\n(?!//|#|# |// )",
-        "Code block missing file path comment as first line",
-    ),
-    "video_reference": (
-        r"(as shown in the video|see the video|like I showed|as demonstrated|视频中的|如视频所示)",
-        "Document references the video instead of being self-contained",
-    ),
-}
+HAS_INSTALL = re.compile(
+    r"(?:pip|pip3|pip install|npm|yarn|pnpm|bun|cnpm|apt|apt-get|brew|cargo|go"
+    r"|mvn|gradle|composer|gem|dotnet|vcpkg|conda|micromamba|dnf|pacman)"
+    r"\s+(?:install|add|update|upgrade|build|run)\b",
+    re.IGNORECASE | re.MULTILINE,
+)
+BARE_INSTALL = re.compile(r"(?:pip|pip3|npm|yarn|pnpm|bun|cnpm)\s+install", re.IGNORECASE)
+MISSING_CONTEXT = re.compile(
+    r"(as shown in the video|see the video|like I showed|as demonstrated"
+    r"|视频中的|如视频所示|如我之前|如上面所|正如我展示)",
+    re.IGNORECASE,
+)
 
 REQUIRED_SECTIONS = [
     r"^# ",
     r"^## 这一讲完成什么",
     r"^## 学习路线",
+]
+
+INSTALL_COMMAND_EXAMPLES = [
+    "pip install faster-whisper",
+    "npm install express",
+    "bun add express",
+    "yarn add express",
+    "pnpm add express",
+    "cargo install cargo-watch",
+    "go install github.com/xxx@latest",
+    "conda install numpy",
+    "apt install build-essential",
 ]
 
 
@@ -61,16 +67,27 @@ def check_code_block_quality(text: str) -> list[str]:
         if not has_path_comment:
             lang = match.group(1) or "unknown"
             if lang not in ("text", "ascii", "tree"):
-                errors.append(f"Code block missing file path comment (first line should be // <path> or # <path>)")
+                errors.append("Code block missing file path comment (first line should be // <path> or # <path>)")
+    return errors
 
-        has_imports = BARE_IMPORT.search(block_text)
-        has_install = PACKAGE_NAMES.search(block_text) or "\n".join(
-            line for line in block_text.split("\n") if line.startswith(("import", "from"))
-        )
-        if has_imports and not has_install:
-            nearby = text[max(0, match.start() - 500):match.start()]
-            if not PACKAGE_NAMES.search(nearby):
-                errors.append("Code block contains imports but no dependency installation command found nearby")
+
+def check_dependency_coverage(text: str) -> list[str]:
+    errors: list[str] = []
+    has_install = bool(HAS_INSTALL.search(text))
+    if not has_install:
+        code_blocks_with_imports = []
+        for match in CODE_BLOCK_RE.finditer(text):
+            block_text = match.group(2)
+            if BARE_IMPORT.search(block_text):
+                lang = match.group(1) or "unknown"
+                if lang not in ("text", "ascii", "tree"):
+                    code_blocks_with_imports.append(lang)
+        if code_blocks_with_imports:
+            errors.append(
+                f"Code blocks contain imports ({', '.join(set(code_blocks_with_imports))}) "
+                f"but no dependency installation command found in the document. "
+                f"Add a section with an installation command near the relevant code."
+            )
     return errors
 
 
@@ -97,7 +114,7 @@ def check_figure_captions(text: str) -> list[str]:
     caption_pattern = re.compile(r"^\*图 \d+：.*，画面时间 \d{2}:\d{2}。\*$", re.MULTILINE)
     for ref in figure_refs:
         if not caption_pattern.search(text):
-            errors.append("Figure reference found but no matching caption with '图 N：...，画面时间 ...' pattern")
+            errors.append("Figure reference found but no matching caption with '图 N：…，画面时间 …' pattern")
             break
     return errors
 
@@ -105,6 +122,7 @@ def check_figure_captions(text: str) -> list[str]:
 def check_quality(text: str) -> dict[str, list[str]]:
     results: dict[str, list[str]] = {}
     results["code_block_quality"] = check_code_block_quality(text)
+    results["dependency_coverage"] = check_dependency_coverage(text)
     results["self_containment"] = check_self_containment(text)
     results["required_sections"] = check_required_sections(text)
     results["figure_captions"] = check_figure_captions(text)
