@@ -20,9 +20,9 @@ def timestamp(seconds: float) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("input", type=Path)
+    parser.add_argument("input", type=Path, nargs="?", default=None)
     parser.add_argument("--workspace", type=Path, default=Path.cwd())
-    parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--output-dir", type=Path, default=None)
     parser.add_argument("--stem", default="transcript")
     parser.add_argument("--model", default="small")
     parser.add_argument("--model-path", type=Path)
@@ -33,7 +33,29 @@ def main() -> int:
     parser.add_argument("--beam-size", type=int, default=5)
     parser.add_argument("--allow-download", action="store_true")
     parser.add_argument("--force", action="store_true")
+    parser.add_argument("--list-models", action="store_true", help="List available local models and exit")
     args = parser.parse_args()
+
+    if args.list_models:
+        workspace = args.workspace.expanduser().resolve()
+        manifest_path = workspace / "output" / "_models" / "manifest.json"
+        if manifest_path.is_file():
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            models = manifest.get("models", {})
+            for name, info in sorted(models.items()):
+                print(f"  {name}: {info['path']} ({info.get('type', '?')})")
+        else:
+            print("  No manifest.json found. Checking raw directories...")
+            models_dir = workspace / "output" / "_models"
+            if models_dir.is_dir():
+                for d in sorted(models_dir.iterdir()):
+                    if d.is_dir() and d.name.startswith("faster-whisper-"):
+                        model_name = d.name.replace("faster-whisper-", "")
+                        print(f"  {model_name}: {d}")
+        return 0
+
+    if args.input is None or args.output_dir is None:
+        parser.error("--input and --output-dir are required unless --list-models is used")
 
     workspace = args.workspace.expanduser().resolve()
     package_roots: list[Path] = []

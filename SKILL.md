@@ -75,6 +75,16 @@ Use this order:
 
 If Whisper is needed, read [references/whisper.md](references/whisper.md) before installing, downloading, or transcribing. Check local packages and local model paths before any network action. Stop repeated model-download attempts after one official endpoint and at most one user-approved fallback; use an already available model when possible. On this workspace, load `scripts/setup.ps1` to prepare the Python 3.13 environment, the shared packages path, and the CUDA runtime DLL path before running a transcription.
 
+#### Check available models first
+
+Before choosing a model, inspect `output/_models/manifest.json` (if it exists) to see which models are already downloaded locally. Run this check at the start of any Whisper-dependent job:
+
+```
+- python -c "import json; print(json.dumps(json.load(open('output/_models/manifest.json')), ensure_ascii=False))"
+```
+
+Prefer a locally available model over downloading. If no model exists, use the model appropriate to the content type from the table below and add it to the manifest after download.
+
 #### 模型选择指南
 
 | 内容类型 | 推荐模型 | 原因 |

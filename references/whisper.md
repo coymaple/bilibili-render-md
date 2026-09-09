@@ -16,9 +16,10 @@ Set `language="zh"` or `language="en"` when the primary language is known. For m
 Before network access, use this lookup order:
 
 1. An explicit `--model-path`.
-2. `FASTER_WHISPER_MODEL_ROOT/faster-whisper-<model>` when the environment variable is set for cross-project reuse.
-3. `<workspace>/output/_models/faster-whisper-<model>`.
-4. A standard Whisper model already present in its cache.
+2. `output/_models/manifest.json` — inspect locally available models (run `scripts/transcribe_faster.py --list-models`).
+3. `FASTER_WHISPER_MODEL_ROOT/faster-whisper-<model>` when the environment variable is set for cross-project reuse.
+4. `<workspace>/output/_models/faster-whisper-<model>`.
+5. A standard Whisper model already present in its cache.
 
 Also check the active project Python environment for `faster_whisper`. Use the fastest available local path rather than installing duplicate packages per job.
 
