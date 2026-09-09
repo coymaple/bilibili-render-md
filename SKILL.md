@@ -57,11 +57,26 @@ Record the chosen fallback in the final document header and in the handoff notes
 
 ## Workflow
 
-### 1. Inspect before downloading
+### 0. Detect video source
 
-Inspect compact metadata first: title, BVID, part list, duration, cover, subtitle tracks, and usable formats. Do not print full platform JSON into the conversation; save it under `source/metadata/` and return only the needed fields.
+Before any other step, determine where the video comes from:
 
-For a multi-part video, list the parts and ask which range to process before downloading media. Do not infer full-series authorization from one URL.
+| 情况 | 动作 |
+|------|------|
+| 用户提供 BVID/URL 且 `source/media/` 下已有该视频文件 | 跳过下载 |
+| 用户提供 BVID/URL 且 `source/media/` 下无视频 | 下载到 `source/media/` |
+| 用户提供本地视频文件路径 | 复制到 `source/media/` |
+| 用户直接指定 `--video-path` 给 `scripts/init_job.py` | 由 init_job 复制到 `source/media/` |
+
+### 1. Inspect and initialize
+
+Initialize the job with `scripts/init_job.py`:
+- Bilibili URL → `scripts/init_job.py --bvid <BVID> --part <N>`
+- Local video → `scripts/init_job.py --video-path <path> --title "<title>"`
+
+After initialization, inspect compact metadata (title, duration, subtitle tracks, usable formats). Do not print full platform JSON into the conversation; save it under `source/metadata/` and return only the needed fields.
+
+For a multi-part video, list the parts and ask which range to process. Do not infer full-series authorization from one URL.
 
 Prefer the highest usable public format. Request browser-cookie access only when public quality is inadequate for readable teaching figures or the user explicitly requests login-gated quality. Never export or persist browser cookies.
 

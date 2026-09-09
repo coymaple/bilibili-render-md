@@ -14,12 +14,17 @@
       - PYTHONPATH is pointed at the shared packages so the interpreter picks
         up yt-dlp / faster-whisper / ctranslate2 without a pip install.
 .EXAMPLE
-    . \.opencode\skills\bilibili-render-md\scripts\setup.ps1
-    New-BilinoteTranscriptEnv -Workspace (Get-Location)
-    & "C:\Python313\python.exe" ".\.opencode\skills\bilibili-render-md\scripts\transcribe_faster.py" \`
-        "...source\media\clip.mp4" --workspace "." --output-dir "...work\transcript" `
-        --model small.en --model-path "...output\_models\faster-whisper-small.en" `
-        --device cuda --compute-type float16 --language en --force
+    # Scenario A: Bilibili URL — init_job downloads the video first
+    python scripts/init_job.py --bvid BVxxx --part 5
+    & "C:\Python313\python.exe" ".\.opencode\skills\bilibili-render-md\scripts\transcribe_faster.py" `
+        ".\source\media\BVxxx_P5.mp4" --workspace "." --output-dir ".\work\transcript" `
+        --model small.en --device cpu --language zh --force
+
+    # Scenario B: Local video file — skip download
+    python scripts/init_job.py --video-path "C:\videos\myvideo.mp4" --title "My Video"
+    & "C:\Python313\python.exe" ".\.opencode\skills\bilibili-render-md\scripts\transcribe_faster.py" `
+        ".\source\media\myvideo_FULL.mp4" --workspace "." --output-dir ".\work\transcript" `
+        --model base --device cpu --language zh --force
 #>
 
 function New-BilinoteTranscriptEnv {
