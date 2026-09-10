@@ -139,6 +139,18 @@ Never send the full SRT, TXT, TSV, and JSON versions of the same transcript into
 - 确保覆盖所有主要教学点
 - 对于关键代码示例，读取包含该代码的完整块
 
+#### Build the content inventory（盘点，写文档前必做）
+
+Before writing any prose, build a per-chunk content inventory so nothing in the transcript is skipped. This replaces post-hoc content checking with a before-you-write checklist.
+
+1. Run `scripts/build_inventory.py --job-root <job-root>` to mechanically extract, per chunk: density, code terms, commands, code-shaped lines, visual cues, and transition cues. It writes `work/transcript/inventory.json`.
+2. Read the inventory once, then read **every chunk** and enrich each entry's `points` array with compact teaching points: concepts, code details, pitfalls, and anything the lecturer implies is on screen (frame-dependent content). Persist these points into `inventory.json`.
+   - This is the one pass that guarantees all transcript content is seen at least once, even when chunks were never read later.
+   - A chunk flagged `"density": "sparse"` means speech carries little information; extract points with the video frames in mind and note the on-screen artifact in `points`.
+   - A chunk whose `visual_cues` list is non-empty describes on-screen content; record what must be captured in prose even if no figure is selected.
+3. **Label the real chapter boundaries.** Platform parts are arbitrary cuts: a course chapter can start or end mid-part. While reading chunks, use `transition_cues` (spoken cues like "接下来进入", "now let's move to", "chapter 4") plus on-screen signals (whiteboard, slides, file/route changes) to identify the lecturer's actual chapter switches. Set each chunk's `chapter` field to the course chapter number (and optionally name) it belongs to; chunks on a boundary get `chapter_boundary: true`. Persist these labels into `inventory.json`.
+4. The outline in step 6 must be derived from this inventory, so it already reflects every chunk.
+
 ### 4. Handle long videos efficiently
 
 When duration exceeds 20 minutes or subtitles exceed 300 entries, read [references/long-video.md](references/long-video.md). Split by real teaching boundaries, not arbitrary equal chunks when chapters are visible.
@@ -157,6 +169,8 @@ Name raw frames by timestamp. Assign a semantic filename only after the image ha
 
 ### 6. Write the notes
 
+Write against the inventory from step 3: before each chapter, read the relevant chunk's `inventory.json` entry plus its transcript chunk, and make sure every term, command, code line, and recorded point from that entry is addressed in the prose or a code block. Do not close a chapter while its chunk's points are unaddressed. Reuse the chunk texts only where a teaching point needs more context; the inventory alone carries the coverage contract.
+
 Write in Chinese unless the user requests another language. Reconstruct a teaching sequence rather than following subtitles line by line. Each major section should establish motivation, mechanism, example or evidence, common failure modes, and takeaway when applicable.
 
 Preserve important code, formulas, commands, examples, and speaker-stated limitations. Explain code before or after the listing. For formulas, explain the purpose and every symbol. Do not invent formulas, code, results, citations, or material from later parts.
@@ -173,7 +187,9 @@ Every code block must carry a comment as its first line that states the file pat
 
 For languages with no comment syntax (for example bare JSON or a directory tree), put a short italic note before the block stating the path instead.
 
-Use the exact path the lecturer presents (project-relative when possible). Terminal commands and other code blocks not tied to a file need no path annotation.
+Use the exact path the lecturer presents (project-relative when possible). Terminal commands and other code blocks not tied to a file need no path annotation. Code blocks written purely to test, demo, or illustrate (not part of the lecturer's project files) also need no path annotation; only blocks that show one of the lecturer's actual files carry the path comment.
+
+The document must be a step-by-step builder's manual: each action is a numbered step with the command or file change first, followed by the exact expected result (what the user sees or the terminal prints). An expected result is written only when it appears in the video — in the subtitles or on screen at a concrete timestamp; never invent an expected result from memory. If the video does not show a verifiable outcome for a step, omit the expected result instead of guessing.
 
 When the lecturer modifies a file that was already shown earlier in the video, do not silently dump the whole file again. Instead:
 
@@ -218,6 +234,11 @@ Produce a consistent, scannable Chinese Markdown document. Follow this structure
 - Level 2 (`## H2`) has exactly two kinds of use:
   - the fixed overview headings `## 这一讲完成什么` and `## 学习路线` (use these exact titles, in this order, right after the metadata blockquote);
   - the numbered teaching chapters `## 一、…`, `## 二、…`, … in order, one per teaching unit.
+- A platform part is an arbitrary cut, not a course chapter. When this part begins or ends inside a course chapter (that is, the inventory labels a `chapter_boundary` chunk inside this part), mark the switch with a highlighted blockquote immediately above the teaching heading where the new course chapter starts:
+
+  `> ⚠️ 章节边界：视频在此从第 N 讲（名称）进入第 N+1 讲（名称），时间 `MM:SS` 附近。`
+
+  Use one such marker per switch. Without a boundary, do not add the marker. If this part begins mid-chapter and no previous part's notes are in scope, note in the metadata blockquote that the part opens in the middle of course chapter N.
 - Level 3 (`### H3`) is for subheads inside a chapter. Pick one consistent numbering scheme for the whole document and do not mix:
   - `### 2.1 描述`, `### 2.2 描述`, … (chapter.subsection), or
   - `### 1. 描述`, `### 2. 描述`, … (sequential restart within each chapter).
@@ -266,6 +287,22 @@ The final Markdown file name must follow one fixed pattern and match the job's v
 - Keep the same heading depth, list marker, and caption numbering from top to bottom.
 - Before delivery the document must pass the layout, link, and separation checks in the validation step below.
 
+#### Inventory cross-check（写完后清单核对）
+
+After drafting and before `validate_delivery.py`, mechanically verify the written document still addresses the inventory:
+
+```
+python scripts/check_inventory_coverage.py --job-root <job-root> --markdown <final-md>
+```
+
+This is a checklist, not a quality review: it reports each chunk's terms, commands, and code lines that do not appear anywhere in the document. `--skip` skips the cross-check after printing a one-line log.
+
+When the report is not `ok`:
+1. Read the gap report's `uncovered` lists for the failing chunks.
+2. Re-read those chunk texts and their inventory `points`.
+3. Patch the affected sections of the document to cover the named imports, commands, and terms.
+4. Re-run the cross-check. Fix in at most two iterations; if still failing, leave the report JSON in `work/logs/` and record the recipe in `work/logs/handoff.md`.
+
 ### 8. Validate before delivery
 
 Run `scripts/validate_delivery.py --job-root <job-root> --markdown <final-md> --strict`.
@@ -280,9 +317,9 @@ Confirm that structural checks pass:
 - the notes do not exceed the user-approved part range;
 - original and intermediate files remain outside `deliverables/`.
 
-Confirm that quality checks pass (the `--strict` flag enables these):
+Confirm that quality checks pass (the `--strict` flag enables these; code-block path-comment findings remain warnings even with `--strict` because shell and test/demo blocks legitimately carry no path):
 
-- every fenced code block has a file path comment as its first line (`// <path>` or `# <path>`);
+- every fenced **project-file** code block has a file path comment as its first line (`// <path>` or `# <path>`); shell, terminal, text/tree, and test/demo code blocks are exempt;
 - code blocks containing imports have a dependency installation command somewhere in the document (e.g. `pip install`, `npm install`, `bun add`, `cargo install`, `conda install`, etc.);
 - the document contains no references to the video (e.g. "as shown in the video", "如视频所示") — it must be self-contained;
 - all required sections are present (`#`, `## 这一讲完成什么`, `## 学习路线`, `## 一、…`);
@@ -299,6 +336,7 @@ Before running `validate_delivery.py`, verify these properties in the draft:
 3. **No video dependency**: No phrases like "as I showed" or "like the video" — everything is written as if the reader has never seen the video.
 4. **Multi-language support**: The document may use Python, TypeScript, shell, JSON, etc. — installation commands must match the language of the code block.
 5. **Path accuracy**: Every `// <path>` comment uses the exact path the lecturer showed, not an invented one.
+6. **Expected results are borrowed, not invented**: Every expected result / acceptance line (what the user sees or the terminal prints after a step) comes from the video — the subtitles or the frame at that timestamp. If the video never shows a verifiable outcome for a step, write the step without an expected result instead of guessing.
 
 #### Re-generation on quality failure
 
@@ -321,10 +359,10 @@ Deliver the final Markdown link first, followed by optional attachment and job-d
 - 尝试使用更小的模型（base而非small）
 
 ### 笔记不完整
-- 读取更多转录块
-- 检查是否覆盖了所有主要教学点
-- 验证代码示例是否完整
-- 执行 Writing quality self-check 中的 5 条自检规则
+- 运行 `scripts/check_inventory_coverage.py` 对照 `work/transcript/inventory.json`，定位哪些 chunk 的术语/命令/代码未进文档
+- 重读对应 chunk 文本和其 inventory `points`，补充到受影响章节
+- 字幕密度为 sparse 的 chunk：确认文档借助视频帧/界面描述补足了屏幕上的信息
+- 验证是否所有 chunk 的 inventory 项都已被文档承接
 
 ### 质量检查失败（依赖命令缺失、引用视频、代码块无路径注释）
 - 根据 `validate_delivery.py --strict` 的输出定位失败类别

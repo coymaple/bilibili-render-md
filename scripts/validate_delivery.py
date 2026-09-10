@@ -22,6 +22,11 @@ SENSITIVE = [
 
 CODE_BLOCK_RE = re.compile(r"```(\w+)?\n(.*?)```", re.DOTALL)
 BARE_IMPORT = re.compile(r"^(import |from )", re.MULTILINE)
+SHELL_LANGS = {
+    "bash", "sh", "shell", "zsh", "powershell", "console", "terminal", "cmd",
+    "text", "ascii", "tree", "plaintext", "log", "json", "yaml", "yml", "sql",
+    "diff",
+}
 HAS_INSTALL = re.compile(
     r"(?:pip|pip3|pip install|npm|yarn|pnpm|bun|cnpm|apt|apt-get|brew|cargo|go"
     r"|mvn|gradle|composer|gem|dotnet|vcpkg|conda|micromamba|dnf|pacman)"
@@ -66,7 +71,7 @@ def check_code_block_quality(text: str) -> list[str]:
         has_path_comment = first_line.startswith("//") or first_line.startswith("#") or first_line.startswith("/*")
         if not has_path_comment:
             lang = match.group(1) or "unknown"
-            if lang not in ("text", "ascii", "tree"):
+            if lang not in SHELL_LANGS:
                 errors.append("Code block missing file path comment (first line should be // <path> or # <path>)")
     return errors
 
@@ -175,9 +180,12 @@ def main() -> int:
             errors.append(f"possible sensitive value matched: {pattern.pattern}")
 
     quality = check_quality(text)
+    # Code-block path comments are best effort: the validator cannot tell a
+    # project file from test/demo code, so missing annotations stay warnings
+    # even under --strict. Remaining categories escalate with --strict.
     for category, cat_errors in quality.items():
         if cat_errors:
-            if args.strict:
+            if args.strict and category != "code_block_quality":
                 errors.extend(cat_errors)
             else:
                 warnings.extend(cat_errors)
