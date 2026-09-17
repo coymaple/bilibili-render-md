@@ -5,11 +5,11 @@ Read this reference only when the requested video has no usable CC subtitles or 
 ## Model choice
 
 - English-only audio: prefer an `.en` model such as `small.en`.
-- Chinese or Chinese-English technical content: use multilingual `small`, `medium`, or `large-v3`; never use an `.en` model.
-- CPU-first default: `small`/`small.en` with `faster-whisper` `compute_type="int8"`.
+- Chinese or Chinese-English technical content: use multilingual `medium` or `large-v3`; never use an `.en` model. Multilingual `small` runs on Chinese but produces too many character errors for a lecture handout — treat it as a last resort and flag the quality risk in the handoff.
+- CPU-first default: `small`/`small.en` with `faster-whisper` `compute_type="int8"`. For Chinese on CPU, `medium int8` is roughly 3-4x slower than `small`; budget for it or use a GPU.
 - Prefer `medium` or `large-v3` only when the quality benefit justifies the extra compute and a suitable local model is available.
 
-Set `language="zh"` or `language="en"` when the primary language is known. For mixed technical content, provide a short initial prompt containing names and domain terms that actually occur in the video.
+Set `language="zh"` or `language="en"` explicitly when the primary language is known. Do not rely on auto-detection for Chinese: short clips or clips that open with music are frequently mis-detected as English. For mixed technical content, provide a short initial prompt containing names and domain terms that actually occur in the video (this noticeably reduces proper-noun errors).
 
 ## Availability checks
 
@@ -22,6 +22,8 @@ Before network access, use this lookup order:
 5. A standard Whisper model already present in its cache.
 
 Also check the active project Python environment for `faster_whisper`. Use the fastest available local path rather than installing duplicate packages per job.
+
+Verify the interpreter before transcribing: run `<python> -c "import faster_whisper"`. A shell may resolve `python` to an empty virtualenv (on this workspace `.venv` is empty), which fails with "faster-whisper is not installed". Switch to the interpreter that already has the package instead of installing it into every job.
 
 For project-shared packages installed with `pip --target`, use `<workspace>/output/_shared/python-packages/`. `scripts/transcribe_faster.py` discovers this directory automatically. For a shared package directory outside the project, set `BILIBILI_RENDER_MD_PYTHONPATH`.
 

@@ -18,7 +18,7 @@ Resolve the workspace at runtime:
 - Never hard-code a prior workspace, user profile, drive letter, or output path.
 - Keep every task under `<workspace>/output/<job-id>/`.
 
-Initialize the task with `scripts/init_job.py`. Use `<BVID>_P<n>` for one part and `<BVID>_FULL` only when the user explicitly requests the full video.
+Initialize the task with `scripts/init_job.py`. Use `<BVID>_P<n>` for one part and `<BVID>_FULL` only when the user explicitly requests the full video. When the source has no BV number, use its aid (`Av<id>`) in place of `<BVID>`.
 
 The following separation is mandatory:
 
@@ -68,11 +68,15 @@ Before any other step, determine where the video comes from:
 | 用户提供本地视频文件路径 | 复制到 `source/media/` |
 | 用户直接指定 `--video-path` 给 `scripts/init_job.py` | 由 init_job 复制到 `source/media/` |
 
+Local material is often staged under `<workspace>/input/<course>/`, with the video and an optional same-stem audio file (`.mp3`, `.m4a`, `.wav`, …) side by side. The input layout is not fixed; always resolve the path the user names. When a same-stem sibling audio file exists, prefer it as the transcription source: copy it to `source/media/` and send it to Whisper directly instead of extracting an audio track from the video. `scripts/init_job.py` discovers sibling audio automatically; use `--audio-path` only to override.
+
 ### 1. Inspect and initialize
 
 Initialize the job with `scripts/init_job.py`:
 - Bilibili URL → `scripts/init_job.py --bvid <BVID> --part <N>`
 - Local video → `scripts/init_job.py --video-path <path> --title "<title>"`
+
+When a local filename encodes the Bilibili identity as `(Av<id>,P<n>)` or `(BV<id>,P<n>)` (for example `6.part1_05(Av113985311540118,P6).mp4`), `init_job.py` parses the id and part from the name automatically, so the job id and the final filename stay in the `<id>_P<n>` form. Never let the raw, long title become the job id.
 
 After initialization, inspect compact metadata (title, duration, subtitle tracks, usable formats). Do not print full platform JSON into the conversation; save it under `source/metadata/` and return only the needed fields.
 
@@ -88,7 +92,11 @@ Use this order:
 2. Local Whisper transcription.
 3. Visual-only analysis when audio is unusable.
 
+If a local audio file is available (see step 0), pass it directly to `scripts/transcribe_faster.py`; faster-whisper reads `.mp3`/`.m4a`/`.wav` without a separate ffmpeg extraction step.
+
 If Whisper is needed, read [references/whisper.md](references/whisper.md) before installing, downloading, or transcribing. Check local packages and local model paths before any network action. Stop repeated model-download attempts after one official endpoint and at most one user-approved fallback; use an already available model when possible. On this workspace, `scripts/transcribe_faster.py` automatically discovers shared packages and CUDA runtime DLLs. The optional `scripts/setup.ps1` script remains available for manual environment inspection.
+
+Run the script with an interpreter that already has `faster-whisper` — verify with `<python> -c "import faster_whisper"` before transcribing. The active `python` may be an empty `.venv`; do not install the package per job, switch to the interpreter that already has it (on this workspace, `C:\Python313\python.exe`).
 
 #### Check available models first
 
@@ -105,17 +113,20 @@ Prefer a locally available model over downloading. If no model exists, use the m
 | 内容类型 | 推荐模型 | 原因 |
 |---------|---------|------|
 | 纯英文 | small.en | 质量更好，速度适中 |
-| 中英混合 | small | 支持多语言 |
-| CPU-only | base/int8 | 速度优先 |
-| GPU可用 | small/float16 | 质量优先 |
+| 纯中文 | medium / large-v3（多语言） | 多语言 `small` 中文错字明显，不足以支撑讲义 |
+| 中英混合 | medium（多语言），急用可 `small` | 需要多语言模型；`small` 术语易错 |
+| CPU-only | small / base（int8） | 速度优先 |
+| GPU 可用 | medium / large-v3（float16） | 质量优先 |
+
+中文或中英混合音频必须显式传 `--language zh`，不要依赖自动检测：短音频或开头有音乐时会被误判成英文。同时用 `--prompt` 传入视频里真实出现的技术名词（例如 `Next.js tRPC React Agent`）可明显减少专有名词错字。中文绝不能使用 `.en` 结尾的模型。
 
 #### CPU-only模式
 
 当GPU不可用时：
 1. 使用`--device cpu`参数
 2. 使用`--compute-type int8`提高速度
-3. 预期处理时间：每10分钟视频约需2-3分钟
-4. 质量略有下降，但足够用于笔记生成
+3. 预期处理时间：`small` 每10分钟视频约需2-3分钟；`medium` 约为其 3-4 倍，长视频优先用 `small` 出初稿或改用 GPU
+4. 质量略有下降；中文内容不要为了速度退回 `small` 而不说明质量风险
 
 #### 处理时间估算
 
@@ -253,7 +264,7 @@ The final Markdown file name must follow one fixed pattern and match the job's v
 
 - Pattern: `<course-slug>_<BVID>_P<n>_图文讲义.md` for a single part, or `<course-slug>_<BVID>_FULL_图文讲义.md` for the whole video.
 - `<course-slug>`: a short readable identifier of the course from the video title, keeping letters and digits (for example `Nextjs15_React19_YouTube 克隆` → `Nextjs15_React19_YouTube`). Drop spaces; do not keep an article, a version suffix that duplicates the BVID, or the words `图文讲义` themselves.
-- `<BVID>`: the video's unchanged BV number (for example `BV1HoN6eREQ2`).
+- `<BVID>`: the video's unchanged BV number (for example `BV1HoN6eREQ2`). If the source provides only an aid and no BV number, write `Av<id>` here and in the job id (for example `Av113985311540118` in `Nextjs15_React19_YouTube_Av113985311540118_P6_图文讲义.md`).
 - `<P<n>>`: the processed part number; `_FULL` replaces it only when the whole video is delivered.
 - Use ASCII underscore `_` as the only separator. The full file name must remain filesystem- and link-safe: no spaces, no `/ \ : * ? " < > |`, and no Chinese punctuation in the name itself.
 - Write the file into `deliverables/docs/`. Keep its name identical to the `#` document title's content minus `图文讲义`, so a reader can find the file from the heading.
@@ -380,7 +391,7 @@ Deliver the final Markdown link first, followed by optional attachment and job-d
 
 A conversion job may span multiple sessions, models, or capabilities. Before switching context — changing model, closing a session, losing vision, or pausing for user input — persist a compact handoff file at `<work>/logs/handoff.md` (this file is a standard per-stage intermediate artifact, not a deliverable). It must contain:
 
-- task goal and video identity: URL, BVID, part, duration, transcription provenance;
+- task goal and video identity: URL, BVID (or aid), part, duration, transcription provenance;
 - completed steps with exact artifact paths under `<job-root>`;
 - pending steps and their order;
 - key decisions and environment traps: verified commands, the `scripts/setup.ps1` usage, dependency levels, GPU DLL workaround;
