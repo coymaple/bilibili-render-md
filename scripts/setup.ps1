@@ -13,16 +13,19 @@
         PATH so those DLLs resolve at runtime.
       - PYTHONPATH is pointed at the shared packages so the interpreter picks
         up yt-dlp / faster-whisper / ctranslate2 without a pip install.
+      - In the examples below, <skill-dir> is where this skill is installed:
+        the project path .opencode\skills\bilibili-render-md, or a global /
+        independent checkout.
 .EXAMPLE
     # Scenario A: Bilibili URL — init_job downloads the video first
     python scripts/init_job.py --bvid BVxxx --part 5
-    & "C:\Python313\python.exe" ".\.opencode\skills\bilibili-render-md\scripts\transcribe_faster.py" `
+    & "C:\Python313\python.exe" "<skill-dir>\scripts\transcribe_faster.py" `
         ".\source\media\BVxxx_P5.mp4" --workspace "." --output-dir ".\work\transcript" `
         --model small.en --device cpu --language zh --force
 
     # Scenario B: Local video file — skip download
     python scripts/init_job.py --video-path "C:\videos\myvideo.mp4" --title "My Video"
-    & "C:\Python313\python.exe" ".\.opencode\skills\bilibili-render-md\scripts\transcribe_faster.py" `
+    & "C:\Python313\python.exe" "<skill-dir>\scripts\transcribe_faster.py" `
         ".\source\media\myvideo_FULL.mp4" --workspace "." --output-dir ".\work\transcript" `
         --model base --device cpu --language zh --force
 #>

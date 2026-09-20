@@ -3,7 +3,7 @@ name: bilibili-render-md
 description: Turn a Bilibili lecture, tutorial, or technical video into structured Chinese Markdown notes with verified key frames, code, formulas, timestamps, and self-contained local assets. Use when the user provides a Bilibili URL or BV number and wants Markdown or 图文讲义; do not use when the required final deliverable is LaTeX/PDF.
 ---
 
-本技能单点维护于 `.opencode/skills/bilibili-render-md`。修改 SKILL.md、scripts/、references/ 或 agents/ 下任何文件后，变更即生效。
+本技能维护于独立仓库 `bilibili-render-md`，以 submodule 挂载在项目路径 `.opencode/skills/bilibili-render-md`（全局安装时位于 `~/.config/opencode/skills/`）。修改 SKILL.md、scripts/、references/ 或 agents/ 下任何文件后，变更即生效。
 
 # Bilibili Render Markdown
 

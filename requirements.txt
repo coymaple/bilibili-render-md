@@ -1,0 +1,15 @@
+# bilibili-render-md 运行依赖
+# 仅声明，不打包。安装示例：pip install -r requirements.txt
+#
+# 语音转写（scripts/transcribe_faster.py 直接 import）
+faster-whisper
+torch
+
+# 视频/音频下载（下载步骤使用，非脚本直接 import）
+yt-dlp
+
+# 说明：
+# - ctranslate2、tokenizers、huggingface-hub 等由 faster-whisper 自动带入。
+# - GPU 转写需要与本机 CUDA 匹配的 torch 轮子（见 references/whisper.md 与 scripts/setup.ps1）。
+# - Whisper 模型权重不入库，通过 <workspace>/output/_models 或
+#   FASTER_WHISPER_MODEL_ROOT 环境变量提供。
