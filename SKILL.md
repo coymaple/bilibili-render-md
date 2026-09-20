@@ -94,9 +94,9 @@ Use this order:
 
 If a local audio file is available (see step 0), pass it directly to `scripts/transcribe_faster.py`; faster-whisper reads `.mp3`/`.m4a`/`.wav` without a separate ffmpeg extraction step.
 
-If Whisper is needed, read [references/whisper.md](references/whisper.md) before installing, downloading, or transcribing. Check local packages and local model paths before any network action. Stop repeated model-download attempts after one official endpoint and at most one user-approved fallback; use an already available model when possible. On this workspace, `scripts/transcribe_faster.py` automatically discovers shared packages and CUDA runtime DLLs. The optional `scripts/setup.ps1` script remains available for manual environment inspection.
+If Whisper is needed, read [references/whisper.md](references/whisper.md) before installing, downloading, or transcribing. Check local packages and local model paths before any network action. Stop repeated model-download attempts after one official endpoint and at most one user-approved fallback; use an already available model when possible. `scripts/transcribe_faster.py` automatically discovers shared packages and CUDA runtime DLLs. The optional `scripts/setup.ps1` script remains available for manual environment inspection.
 
-Run the script with an interpreter that already has `faster-whisper` — verify with `<python> -c "import faster_whisper"` before transcribing. The active `python` may be an empty `.venv`; do not install the package per job, switch to the interpreter that already has it (on this workspace, `C:\Python313\python.exe`).
+Run the script with an interpreter that already has `faster-whisper` — verify with `<python> -c "import faster_whisper"` before transcribing. The active `python` may be an empty `.venv`; do not install the package per job, switch to the interpreter that already has it (see [references/whisper.md](references/whisper.md)).
 
 #### Check available models first
 
