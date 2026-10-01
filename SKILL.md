@@ -29,6 +29,7 @@ output/<job-id>/
 │  └─ media/
 ├─ work/                           Regenerable intermediate artifacts
 │  ├─ transcript/
+│  ├─ hotspots/
 │  ├─ frames/{coarse,targeted}/
 │  ├─ contact-sheets/
 │  ├─ logs/
@@ -79,6 +80,8 @@ Initialize the job with `scripts/init_job.py`:
 When a local filename encodes the Bilibili identity as `(Av<id>,P<n>)` or `(BV<id>,P<n>)` (for example `6.part1_05(Av113985311540118,P6).mp4`), `init_job.py` parses the id and part from the name automatically, so the job id and the final filename stay in the `<id>_P<n>` form. Never let the raw, long title become the job id.
 
 After initialization, inspect compact metadata (title, duration, subtitle tracks, usable formats). Do not print full platform JSON into the conversation; save it under `source/metadata/` and return only the needed fields.
+
+Use scripts/acquire_bilibili.py for the normal remote-media path. It defaults to metadata inspection only. Add --download only after the part scope is approved; downloading without --part requires the explicit --full flag. The script saves compact metadata separately from the raw yt-dlp response and never requests browser cookies on its own.
 
 For a multi-part video, list the parts and ask which range to process. Do not infer full-series authorization from one URL.
 
@@ -145,8 +148,9 @@ Never send the full SRT, TXT, TSV, and JSON versions of the same transcript into
 #### 转录块读取策略
 
 对于50分钟以上的视频：
-- 至少读取50%的转录块（约5-6个块）
-- 优先读取开头、中间和结尾的块
+- inventory enrichment pass must read every chunk once
+- during drafting, re-read only the chunks needed for the current section rather than scanning the full transcript again
+- for deeper verification, prioritize opening, middle, ending, and code-heavy chunks
 - 确保覆盖所有主要教学点
 - 对于关键代码示例，读取包含该代码的完整块
 
@@ -162,6 +166,18 @@ Before writing any prose, build a per-chunk content inventory so nothing in the 
 3. **Label the real chapter boundaries.** Platform parts are arbitrary cuts: a course chapter can start or end mid-part. While reading chunks, use `transition_cues` (spoken cues like "接下来进入", "now let's move to", "chapter 4") plus on-screen signals (whiteboard, slides, file/route changes) to identify the lecturer's actual chapter switches. Set each chunk's `chapter` field to the course chapter number (and optionally name) it belongs to; chunks on a boundary get `chapter_boundary: true`. Persist these labels into `inventory.json`.
 4. The outline in step 6 must be derived from this inventory, so it already reflects every chunk.
 
+#### Optional: extract core-topic hotspots
+
+Run this only when the user asks for core topics or high-value video segments. It is an additive side path and must not alter, shorten, reorder, or otherwise change the normal Markdown workflow or its deliverables.
+
+1. After a timestamped SRT exists, run scripts/extract_hotspots.py with --job-root and an optional --count. The script writes deterministic recall results to work/hotspots/hotspot-candidates.json. It uses overlapping subtitle windows, interpretable content signals, optional inventory evidence, and overlap suppression. These scores are candidate-ranking signals, not claims about audience popularity or final editorial value.
+2. Read only each candidate's compact evidence first. For plausible candidates, inspect the nearby timestamped transcript lines and merge candidates that express the same idea.
+3. Write the reviewed result to work/hotspots/hotspots.json. Every accepted hotspot must contain start, end, title, reason, keywords, and at least one verbatim timestamped evidence line. Use concise Chinese titles and state why the segment is useful to a viewer.
+4. Reject greetings, sponsorship, repetition, routine transitions, and segments whose meaning depends on missing context. Never label a candidate as a hotspot solely because it contains words such as “核心” or “重要”.
+5. Keep hotspot extraction in work/ unless the user explicitly asks to include it in the final Markdown or another deliverable. The normal document structure and validation remain unchanged.
+
+For the deterministic post-transcription stages, scripts/run_pipeline.py may be used to run transcript slicing, inventory construction, optional hotspot recall, inventory coverage, and delivery validation. It checkpoints each stage in work/pipeline-state.json, skips existing artifacts by default, and rebuilds them only with an explicit --force. This orchestrator is optional; all existing individual script commands remain supported.
+
 ### 4. Handle long videos efficiently
 
 When duration exceeds 20 minutes or subtitles exceed 300 entries, read [references/long-video.md](references/long-video.md). Split by real teaching boundaries, not arbitrary equal chunks when chapters are visible.
@@ -175,6 +191,8 @@ Use subtitle timestamps to identify high-value windows. First create coarse chap
 This step assumes a vision-capable model; otherwise apply the fallback in the "Detect vision capability" section above.
 
 Use contact sheets for recall, then directly inspect several nearby original frames before selecting one. Reject frames that are incomplete, transitional, unreadable, redundant, error-filled, or expose secrets or private data. Do not use OCR as a substitute for visual understanding.
+
+Use scripts/extract_frames.py for coarse interval sampling and targeted timestamp extraction. It records a frames.json timestamp map beside the images. Use scripts/make_contact_sheet.py to assemble those frames into a labeled sheet. These tools write only to work/ by default; selected and verified figures are still copied separately into the delivery assets directory.
 
 Name raw frames by timestamp. Assign a semantic filename only after the image has been visually confirmed. Copy selected figures to `deliverables/assets/figures/` and record the source time or subtitle-aligned interval in the Markdown caption.
 

@@ -86,6 +86,7 @@ def main() -> int:
         "work/frames/coarse",
         "work/frames/targeted",
         "work/contact-sheets",
+        "work/hotspots",
         "work/logs",
         "work/temp",
         "deliverables/docs",

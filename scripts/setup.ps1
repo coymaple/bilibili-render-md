@@ -17,16 +17,17 @@
         the project path .opencode\skills\bilibili-render-md, or a global /
         independent checkout.
 .EXAMPLE
-    # Scenario A: Bilibili URL - init_job downloads the video first
+    # Scenario A: Bilibili URL - initialize, then acquire explicitly
     python scripts/init_job.py --bvid BVxxx --part 5
+    python scripts/acquire_bilibili.py BVxxx --job-root output/BVxxx_P5 --part 5 --download
     & "<python>" "<skill-dir>\scripts\transcribe_faster.py" `
-        ".\source\media\BVxxx_P5.mp4" --workspace "." --output-dir ".\work\transcript" `
+        ".\output\BVxxx_P5\source\media\BVxxx_P5.mp4" --workspace "." --output-dir ".\output\BVxxx_P5\work\transcript" `
         --model small.en --device cpu --language zh --force
 
     # Scenario B: Local video file - skip download
     python scripts/init_job.py --video-path "<path-to-video>" --title "My Video"
     & "<python>" "<skill-dir>\scripts\transcribe_faster.py" `
-        ".\source\media\myvideo_FULL.mp4" --workspace "." --output-dir ".\work\transcript" `
+        ".\output\myvideo_FULL\source\media\myvideo_FULL.mp4" --workspace "." --output-dir ".\output\myvideo_FULL\work\transcript" `
         --model base --device cpu --language zh --force
 #>
 

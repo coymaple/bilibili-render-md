@@ -2,11 +2,14 @@
 # 仅声明，不打包。安装示例：pip install -r requirements.txt
 #
 # 语音转写（scripts/transcribe_faster.py 直接 import）
-faster-whisper
-torch
+faster-whisper>=1.1,<2
+torch>=2.4,<3
 
 # 视频/音频下载（下载步骤使用，非脚本直接 import）
-yt-dlp
+yt-dlp>=2025.1
+
+# 联系表生成（scripts/make_contact_sheet.py）
+Pillow>=10,<13
 
 # 说明：
 # - ctranslate2、tokenizers、huggingface-hub 等由 faster-whisper 自动带入。

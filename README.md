@@ -18,6 +18,7 @@
 - **有界降级**：字幕优先用平台 CC，其次本地 Whisper 转写，最后才纯视觉分析。
 - **覆盖契约**：写文档前先做逐块内容盘点（inventory），保证不遗漏术语、命令、代码。
 - **关键帧核对**：先用缩略图筛，再逐张看原图，只保留能讲清知识点的图。
+- **热点提取**：可选地从字幕召回核心话题与高价值片段，并保留时间范围和原文证据供语义复核。
 - **可校验**：交付前跑结构 + 质量校验（链接、路径注释、依赖命令、自包含性等）。
 - **交接友好**：支持跨会话/跨模型续跑，用 `work/logs/handoff.md` 保存进度。
 - **目录分离**：原始素材、可再生中间产物、最终交付物严格分层。
@@ -35,9 +36,14 @@ bilibili-render-md/
 │  └─ long-video.md            长视频处理策略
 └─ scripts/
    ├─ init_job.py              初始化任务、识别来源、建立目录
+   ├─ acquire_bilibili.py      检查元数据并按授权下载指定分 P
    ├─ transcribe_faster.py     faster-whisper 转写
    ├─ slice_transcript.py      转录切块与索引
    ├─ build_inventory.py       逐块内容盘点
+   ├─ extract_hotspots.py      核心话题/高价值片段候选召回
+   ├─ extract_frames.py        粗采样或按时间戳抽帧
+   ├─ make_contact_sheet.py    生成带时间标签的联系表
+   ├─ run_pipeline.py          可恢复的后处理流水线
    ├─ check_inventory_coverage.py  盘点与文档的覆盖核对
    ├─ validate_delivery.py     交付前结构与质量校验
    └─ setup.ps1                可选：本机转写环境准备（Windows）
@@ -67,6 +73,8 @@ pip install -r requirements.txt
 
 - 脚本直接依赖：`faster-whisper`、`torch`。
 - 下载步骤需要 `yt-dlp`。
+- 联系表生成需要 `Pillow`。
+- 依赖声明使用兼容版本范围，避免无上限升级破坏脚本接口。
 - `ctranslate2`、`tokenizers`、`huggingface-hub` 等由 `faster-whisper` 自动带入。
 - **Whisper 模型权重不入库**：放在 `<workspace>/output/_models/faster-whisper-<model>`，或用环境变量 `FASTER_WHISPER_MODEL_ROOT` 指向其父目录。
 - 共享包目录（`pip --target` 安装）可用环境变量 `BILIBILI_RENDER_MD_PYTHONPATH` 指定，`transcribe_faster.py` 也会自动发现 `<workspace>/output/_shared/python-packages/`。
@@ -82,20 +90,29 @@ pip install -r requirements.txt
 ```bash
 # 1) 初始化任务（B 站链接）
 python scripts/init_job.py --bvid BVxxxxxxxxxx --part 1
+#    先检查元数据；确认分 P 后再显式增加 --download
+python scripts/acquire_bilibili.py BVxxxxxxxxxx --job-root output/BVxxxxxxxxxx_P1 --part 1
 #    或本地视频
 python scripts/init_job.py --video-path "C:\videos\demo.mp4" --title "Demo"
 
 # 2) 转写（用已装好 faster-whisper 的解释器）
-<python> scripts/transcribe_faster.py "source/media/....mp4" \
-    --workspace . --output-dir work/transcript --model medium --device cpu --language zh
+<python> scripts/transcribe_faster.py "output/<job-id>/source/media/....mp4" \
+    --workspace . --output-dir output/<job-id>/work/transcript --model medium --device cpu --language zh
 
 # 3) 切块 + 盘点
-python scripts/slice_transcript.py --job-root output/<job-id>
+python scripts/slice_transcript.py output/<job-id>/work/transcript/transcript.srt \
+    --output-dir output/<job-id>/work/transcript/chunks
 python scripts/build_inventory.py --job-root output/<job-id>
 
-# 4) 覆盖核对 + 交付校验
+# 4) 可选：提取核心话题/高价值片段候选
+python scripts/extract_hotspots.py --job-root output/<job-id> --count 8
+
+# 5) 覆盖核对 + 交付校验
 python scripts/check_inventory_coverage.py --job-root output/<job-id> --markdown <final-md>
 python scripts/validate_delivery.py --job-root output/<job-id> --markdown <final-md> --strict
+
+# 或在字幕生成后统一运行可恢复流水线
+python scripts/run_pipeline.py --job-root output/<job-id> --hotspots
 ```
 
 ## 工作流概览
@@ -106,8 +123,9 @@ python scripts/validate_delivery.py --job-root output/<job-id> --markdown <final
 | 1 | 初始化任务、读取元信息、确认分 P 范围 |
 | 2 | 取文本：CC 字幕 → 本地 Whisper → 纯视觉（有界降级） |
 | 3 | 转录切块，建立逐块内容盘点（写前必做） |
+| 3a | 可选：召回核心话题/高价值片段并进行语义复核 |
 | 4 | 长视频按真实章节切分，必要时用最小上下文子代理 |
-| 5 | 用时间戳定位并**肉眼核对**关键帧 |
+| 5 | 抽帧、生成联系表并**肉眼核对**关键帧 |
 | 6 | 按盘点撰写讲义（中文、教学顺序、代码带路径注释） |
 | 7 | 统一 Markdown 格式与命名规范 |
 | 8 | 交付前校验（结构 + 质量），失败则定点重写 |
@@ -119,12 +137,25 @@ python scripts/validate_delivery.py --job-root output/<job-id> --markdown <final
 ```text
 output/<job-id>/
 ├─ source/           原始平台素材（元数据、媒体）
-├─ work/             可再生中间产物（转录、抽帧、盘点、日志）
+├─ work/             可再生中间产物（转录、热点、抽帧、盘点、日志）
 └─ deliverables/     最终自包含交付（docs/、assets/、attachments/）
 ```
 
 - 最终 Markdown 只写入 `deliverables/docs/`，且不得链接到 `source/` 或 `work/`。
 - 最终文件名形如 `<课程简称>_<BVID>_P<n>_图文讲义.md`（整片为 `_FULL`）。
+
+## 热点提取
+
+热点提取是一个可选旁路，不影响原有讲义流程。脚本从 SRT 构造重叠时间窗，结合信息密度、解释/重点/实践信号及已有 inventory 进行候选召回，并用重叠抑制避免结果扎堆。
+
+候选写入 work/hotspots/hotspot-candidates.json，不会自动改变原有 Markdown 产物。候选结果不是平台热度，也不是最终价值判断；Agent 或人工需要根据每条候选的 evidence 复核、合并和命名，再将确认结果写入同目录的 hotspots.json。
+
+## 媒体与画面工具
+
+- acquire_bilibili.py 默认只检查并保存精简元数据；只有显式传入 --download 才下载，且多 P 视频必须指定 --part 或明确传入 --full。
+- extract_frames.py 支持 coarse 间隔抽帧和 targeted 时间戳抽帧，输出 frames.json 时间映射。
+- make_contact_sheet.py 读取帧清单并生成带时间标签的联系表。
+- run_pipeline.py 串联切块、inventory、可选热点和最终校验，并把每阶段状态写入 work/pipeline-state.json；已有产物默认跳过，传入 --force 才重建。
 
 ## 常见问题
 

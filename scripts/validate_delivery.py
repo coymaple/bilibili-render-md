@@ -6,10 +6,12 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import sys
 from pathlib import Path
 
 
 LINK = re.compile(r"!?\[[^\]]*\]\(([^)]+)\)")
+IMAGE = re.compile(r"!\[[^\]]*\]\(([^)]+)\)")
 SENSITIVE = [
     re.compile(
         r"(?i)(api[_-]?key|access[_-]?token|secret|cookie)\s*[:=]\s*[\"']?"
@@ -33,7 +35,14 @@ HAS_INSTALL = re.compile(
     r"\s+(?:install|add|update|upgrade|build|run)\b",
     re.IGNORECASE | re.MULTILINE,
 )
-BARE_INSTALL = re.compile(r"(?:pip|pip3|npm|yarn|pnpm|bun|cnpm)\s+install", re.IGNORECASE)
+PYTHON_IMPORT = re.compile(r"^(?:from|import)\s+([A-Za-z_][A-Za-z0-9_.]*)", re.MULTILINE)
+JS_EXTERNAL_IMPORT = re.compile(
+    r"(?:from\s+|require\(\s*)[\"'](?![./])[^\"']+[\"']", re.MULTILINE
+)
+PYTHON_INSTALL = re.compile(r"\b(?:pip3?|conda|micromamba)\s+install\b", re.I)
+JS_INSTALL = re.compile(r"\b(?:npm|pnpm|yarn|bun|cnpm)\s+(?:install|add)\b", re.I)
+RUST_INSTALL = re.compile(r"\bcargo\s+(?:add|install)\b", re.I)
+GO_INSTALL = re.compile(r"\bgo\s+(?:get|install)\b", re.I)
 MISSING_CONTEXT = re.compile(
     r"(as shown in the video|see the video|like I showed|as demonstrated"
     r"|视频中的|如视频所示|如我之前|如上面所|正如我展示)",
@@ -78,20 +87,39 @@ def check_code_block_quality(text: str) -> list[str]:
 
 def check_dependency_coverage(text: str) -> list[str]:
     errors: list[str] = []
-    has_install = bool(HAS_INSTALL.search(text))
-    if not has_install:
-        code_blocks_with_imports = []
-        for match in CODE_BLOCK_RE.finditer(text):
-            block_text = match.group(2)
-            if BARE_IMPORT.search(block_text):
-                lang = match.group(1) or "unknown"
-                if lang not in ("text", "ascii", "tree"):
-                    code_blocks_with_imports.append(lang)
-        if code_blocks_with_imports:
+    ecosystems: set[str] = set()
+    for match in CODE_BLOCK_RE.finditer(text):
+        language = (match.group(1) or "").lower()
+        block_text = match.group(2)
+        if language in {"python", "py"}:
+            modules = {
+                imported.group(1).split(".", 1)[0]
+                for imported in PYTHON_IMPORT.finditer(block_text)
+            }
+            if modules - sys.stdlib_module_names:
+                ecosystems.add("Python")
+        elif language in {"javascript", "js", "jsx", "typescript", "ts", "tsx"}:
+            if JS_EXTERNAL_IMPORT.search(block_text):
+                ecosystems.add("JavaScript/TypeScript")
+        elif language == "rust" and re.search(r"^\s*(?:use|extern crate)\s+", block_text, re.M):
+            ecosystems.add("Rust")
+        elif language == "go" and re.search(r"^\s*import\s+", block_text, re.M):
+            ecosystems.add("Go")
+        elif language not in SHELL_LANGS and BARE_IMPORT.search(block_text):
+            ecosystems.add("unknown")
+
+    installers = {
+        "Python": PYTHON_INSTALL,
+        "JavaScript/TypeScript": JS_INSTALL,
+        "Rust": RUST_INSTALL,
+        "Go": GO_INSTALL,
+        "unknown": HAS_INSTALL,
+    }
+    for ecosystem in sorted(ecosystems):
+        if not installers[ecosystem].search(text):
             errors.append(
-                f"Code blocks contain imports ({', '.join(set(code_blocks_with_imports))}) "
-                f"but no dependency installation command found in the document. "
-                f"Add a section with an installation command near the relevant code."
+                f"{ecosystem} code imports external dependencies but no matching "
+                "installation command was found in the document."
             )
     return errors
 
@@ -115,12 +143,36 @@ def check_required_sections(text: str) -> list[str]:
 
 def check_figure_captions(text: str) -> list[str]:
     errors: list[str] = []
-    figure_refs = re.findall(r"!\[.*?\]\(", text)
-    caption_pattern = re.compile(r"^\*图 \d+：.*，画面时间 \d{2}:\d{2}。\*$", re.MULTILINE)
-    for ref in figure_refs:
-        if not caption_pattern.search(text):
-            errors.append("Figure reference found but no matching caption with '图 N：…，画面时间 …' pattern")
-            break
+    lines = text.splitlines()
+    caption_pattern = re.compile(
+        r"^\*图 (\d+)：.+，画面时间 (?:\d{2}:)?\d{2}:\d{2}。\*$"
+    )
+    captions: list[int] = []
+    for line_number, line in enumerate(lines):
+        image = IMAGE.search(line)
+        if not image:
+            continue
+        target = image.group(1).strip().strip("<>").replace("\\", "/")
+        if "/cover/" in f"/{target.lstrip('/')}":
+            continue
+        next_line = line_number + 1
+        while next_line < len(lines) and not lines[next_line].strip():
+            next_line += 1
+        if next_line >= len(lines):
+            errors.append(
+                f"Figure on line {line_number + 1} has no following caption"
+            )
+            continue
+        match = caption_pattern.fullmatch(lines[next_line].strip())
+        if not match:
+            errors.append(
+                f"Figure on line {line_number + 1} must be followed by a caption "
+                "matching '图 N：…，画面时间 MM:SS。'"
+            )
+            continue
+        captions.append(int(match.group(1)))
+    if captions and captions != list(range(1, len(captions) + 1)):
+        errors.append("Figure captions must be uniquely numbered from 1 in document order")
     return errors
 
 
